@@ -258,6 +258,8 @@ small{font-size:max(11px,.82em)}
   #sidebar{max-height:calc(100vh - 160px)}
   #toasts{top:calc(var(--sa-t) + 60px)}
 }
+
+.ci em .lk{font-style:normal;color:var(--warn,#e9a23b)}
 </style>
 </head>
 <body>
@@ -396,10 +398,10 @@ const ALTS = {
   alt_bolted_plate:{n:'Heavy Riveted Panel',b:'assembler',in:{iron_plate:60,screw:200},out:{reinforced_plate:14},req:'m_asm',t:8*3600,cost:{reinforced_plate:20,rotor:10}},
   alt_copper_rotor:{n:'Wound Spindle',b:'assembler',in:{wire:45,screw:60},out:{rotor:8},req:'m_asm',t:12*3600,cost:{reinforced_plate:30,cable:100}},
   alt_steel_rod:{n:'Drawn Steel Bar',b:'constructor',in:{steel_ingot:15},out:{iron_rod:50},req:'m_steel',t:12*3600,cost:{steel_beam:40,rotor:20}},
-  alt_steel_screw:{n:'Stamped Rivets',b:'constructor',in:{steel_beam:6},out:{screw:240},req:'m_steel',t:86400,cost:{steel_beam:60,frame:10}},
+  alt_steel_screw:{n:'Stamped Rivets',b:'constructor',in:{steel_beam:6},out:{screw:240},req:'m_frame',t:86400,cost:{steel_beam:60,frame:10}},
   alt_fine_concrete:{n:'Silica Concrete',b:'assembler',in:{silica:10,limestone:25},out:{concrete:22},req:'m_quartz',t:86400,cost:{motor:10,concrete_beam:20}},
-  alt_quick_cable:{n:'Filament Cable',b:'assembler',in:{fine_wire:10,rubber:6},out:{cable:24},req:'m_oil',t:2*86400,cost:{motor:20,plastic:100}},
-  alt_gold_circuit:{n:'Aurium Logic Board',b:'assembler',in:{plastic:15,fine_wire:30},out:{circuit:8},req:'m_oil',t:2*86400,cost:{computer:5,motor:20}},
+  alt_quick_cable:{n:'Filament Cable',b:'assembler',in:{fine_wire:10,rubber:6},out:{cable:24},req:'m_mfg',t:2*86400,cost:{motor:20,plastic:100}},
+  alt_gold_circuit:{n:'Aurium Logic Board',b:'assembler',in:{plastic:15,fine_wire:30},out:{circuit:8},req:'m_mfg',t:2*86400,cost:{computer:5,motor:20}},
 };
 for (const k in ALTS) RECIPES[k]={...ALTS[k],alt:true};
 for (const k in RECIPES) RECIPES[k].id = k;
@@ -418,7 +420,7 @@ const BUILDINGS = {
   coal_gen:{warm:300,n:'Coal Boiler',bt:90,cat:'Power',gen:60,fuel:{coal:10},cost:{reinforced_plate:10,rotor:5,cable:30},d:'60 MW. Burns coal as load needs.'},
   fuel_gen:{warm:600,n:'Combustion Turbine',bt:600,cat:'Power',gen:130,fuel:{fuel:9},cost:{computer:4,heavy_frame:2,rubber:40},d:'130 MW. Burns refined fuel.'},
   geo_gen:{warm:1800,n:'Geyser Tap',bt:900,cat:'Power',gen:120,cost:{motor:8,heavy_frame:2,concrete_beam:20},d:'Place on a geyser. Free power scaled by purity.',node:'geyser'},
-  drone_port:{n:'Power Relay',bt:3600,cat:'Power',cost:{iron_plate:60,screw:100,wire:80},d:'Links this zone to your main power grid. Zones without one only get power from generators built inside them.'},
+  drone_port:{n:'Power Relay',bt:3600,cat:'Power',cost:{iron_plate:60,screw:100,iron_rod:60},d:'Links this zone to your main power grid. Zones without one only get power from generators built inside them.'},
   storage:{n:'Storage Silo',bt:12,cat:'Logistics',cost:{iron_plate:20,iron_rod:20},d:'+200 capacity for every item.'},
   splitter:{n:'Belt Divider',bt:20,cat:'Logistics',router:1,cost:{iron_plate:10,screw:20},d:'1 belt in, up to 3 out. Splits items evenly across its outputs.'},
   merger:{n:'Belt Combiner',bt:20,cat:'Logistics',router:1,cost:{iron_plate:10,screw:20},d:'Up to 3 belts in, 1 out. Combines lines onto one belt.'},
@@ -472,7 +474,7 @@ const MILESTONES = [
   {id:'m_field',tier:0,n:'Field Operations',cost:{iron_plate:20,iron_rod:20},t:30,unl:['b:storage'],d:'Storage silos for bigger buffers.'},
   {id:'m_screw',tier:0,n:'Fasteners',cost:{iron_plate:60,iron_rod:40},t:60,unl:['r:screw'],req:['m_field']},
   {id:'m_copper',tier:0,n:'Copper Survey',cost:{iron_plate:100,screw:100},t:120,unl:['z:1','r:copper_ingot','r:wire','r:cable','b:drone_port'],req:['m_screw'],d:'Reveals Copper Ridge.'},
-  {id:'m_route',tier:0,n:'Belt Routing',cost:{iron_plate:150,screw:150,wire:60},t:240,unl:['b:splitter','b:merger'],req:['m_copper'],d:'Splitters and Mergers: divide and combine belt lines.'},
+  {id:'m_route',tier:0,n:'Belt Routing',cost:{iron_plate:150,screw:150,wire:60},t:240,unl:['b:splitter','b:merger'],req:['m_copper'],d:'Belt Dividers and Combiners: split and join belt lines.'},
   {id:'m_lime',tier:0,n:'Masonry',cost:{iron_plate:150,wire:100,cable:30},t:180,unl:['z:2','r:concrete'],req:['m_copper'],d:'Reveals Chalk Flats.'},
   {id:'m_asm',tier:1,n:'Component Lines',cost:{cable:80,concrete:100,screw:300},t:300,unl:['b:assembler','r:reinforced_plate','r:rotor','r:hull_plating'],req:['m_lime']},
   {id:'m_sink',tier:1,n:'Matter Reclamation',cost:{reinforced_plate:10,concrete:120},t:360,unl:['b:recycler'],req:['m_asm'],d:'Reclaim surplus for Credits and Flux Shards.'},
@@ -484,8 +486,8 @@ const MILESTONES = [
   {id:'m_motor',tier:2,n:'Electromagnetics',cost:{steel_pipe:100,frame:20,wire:500},t:1200,unl:['r:stator','r:motor','r:lattice_frame','r:control_harness'],req:['m_frame']},
   {id:'m_aurium',tier:3,n:'Aurium Metallurgy',cost:{motor:20,frame:40},t:1800,unl:['z:4','r:aurium_ingot','r:fine_wire'],req:['lift2'],d:'Reveals Golden Canyon.'},
   {id:'m_quartz',tier:3,n:'Crystal Optics',cost:{motor:30,concrete_beam:40},t:1800,unl:['z:5','r:silica','r:crystal','r:circuit'],req:['m_aurium'],d:'Reveals Crystal Shelf.'},
-  {id:'m_oil',shards:2,tier:3,n:'Crude Refining',cost:{motor:40,concrete_beam:60,steel_pipe:300},t:2700,unl:['z:6','b:pump','b:refinery','r:plastic','r:rubber','r:fuel'],req:['lift2'],d:'Reveals Tar Marsh.'},
-  {id:'m_mfg',shards:5,tier:3,n:'Precision Assembly',cost:{motor:60,plastic:200,circuit:40},t:3600,unl:['b:manufacturer','r:computer','r:heavy_frame','r:drive_core','r:nav_computer','u:mk3'],req:['m_oil','m_quartz'],d:'Also unlocks Drill Rig Mk3.'},
+  {id:'m_oil',shards:2,tier:3,n:'Crude Refining',cost:{motor:40,concrete_beam:60,steel_pipe:300},t:2700,unl:['z:6','b:pump','b:refinery','r:plastic','r:rubber','r:fuel'],req:['lift2','m_sink'],d:'Reveals Tar Marsh. Needs Flux Shards from a Matter Reclaimer.'},
+  {id:'m_mfg',shards:5,tier:3,n:'Precision Assembly',cost:{motor:60,plastic:200,circuit:40},t:3600,unl:['b:manufacturer','r:computer','r:heavy_frame','r:drive_core','r:nav_computer','u:mk3'],req:['m_oil','m_quartz'],d:'Also unlocks Drill Rig Gen 3.'},
   {id:'m_fuel',shards:3,tier:3,n:'Turbine Power',cost:{computer:10,rubber:200},t:3600,unl:['b:fuel_gen'],req:['m_mfg']},
   {id:'m_geo',shards:6,tier:3,n:'Geyser Taps',cost:{heavy_frame:10,computer:20},t:5400,unl:['z:7','b:geo_gen'],req:['m_mfg'],d:'Reveals Geyser Fields.'},
 ];
@@ -503,12 +505,12 @@ const UPGRADES = [
   {id:'u_belt',n:'Conveyor Belts',d:'Raise belt tier: every machine can move more items per minute',max:5,times:[600,2*3600,12*3600,2*86400,5*86400],costs:[{iron_plate:100,screw:200},{reinforced_plate:40,rotor:20},{frame:30,steel_beam:100},{motor:40,concrete_beam:60},{computer:20,heavy_frame:10}]},
   {id:'u_power',n:'Grid Efficiency',d:'+10% power generation',per:.10,t0:120,bands:[{wire:120,cable:30},{reinforced_plate:8,cable:60},{steel_pipe:40,stator:6},{motor:4,rubber:30},{computer:2,heavy_frame:1}]},
   {id:'u_store',n:'Silo Compression',d:'+50% storage capacity',per:.5,t0:180,bands:[{iron_plate:80,iron_rod:60},{reinforced_plate:12,concrete:120},{frame:6,steel_beam:30},{concrete_beam:12,motor:3},{heavy_frame:2,plastic:80}]},
-  {id:'u_sink',n:'Recycler Yield',d:'+15% Credits from recycling',per:.15,t0:240,bands:[{reinforced_plate:10,concrete:80},{frame:4,cable:80},{motor:3,steel_pipe:60},{computer:1,rubber:60}]},
+  {id:'u_sink',n:'Reclaimer Yield',d:'+15% Credits from the Matter Reclaimer',req:'m_sink',per:.15,t0:240,bands:[{reinforced_plate:10,concrete:80},{frame:4,cable:80},{motor:3,steel_pipe:60},{computer:1,rubber:60}]},
   {id:'u_build',n:'Rapid Fabrication',d:'−8% build and upgrade time',per:.08,t0:180,max:10,bands:[{iron_plate:60,iron_rod:60},{reinforced_plate:10,rotor:5},{frame:5,steel_pipe:40},{motor:4,concrete_beam:8}]},
   {id:'u_off',n:'Autonomous Ops',d:'+1h offline production cap',per:1,t0:600,max:8,bands:[{reinforced_plate:20,rotor:10},{frame:10,steel_beam:40},{motor:8,concrete_beam:20},{computer:4,heavy_frame:2}]},
 ];
 
-// Map: 32x32 tiles. Zones are revealed by research.
+// Map: 44x44 tiles. Zones are revealed by research.
 const ZONES = [
   {n:'Landing Meadow',r:[13,12,29,29],g:'#6a8f55',prop:'tree'},
   {n:'Copper Ridge',r:[30,11,42,30],g:'#9a7354',prop:'rock',res:['copper_ore','iron_ore']},
@@ -541,16 +543,16 @@ const WEEKLY_MODS = [
   {id:'iron_age',n:'Iron Age',d:'Iron miners +50%.'},
   {id:'solar_flare',n:'Solar Flare',d:'Power generation +30%.'},
   {id:'overtime',n:'Overtime',d:'Research and construction 25% faster.'},
-  {id:'scrap_market',n:'Scrap Market',d:'Recycler Credits +50%.'},
-  {id:'assembly_week',n:'Assembly Week',d:'Assembly Presses and Manufacturers +25%.'},
+  {id:'scrap_market',n:'Scrap Market',d:'Reclaimer Credits +50%.'},
+  {id:'assembly_week',n:'Assembly Week',d:'Assembly Presses and Production Complexes +25%.'},
 ];
 const LOGIN_REWARDS = [{credits:150},{cores:3},{credits:400},{chips:1},{cores:6},{credits:1000},{cores:12,chips:2}];
 const WEEKLY_STAGES = [{m:1,r:{credits:500}},{m:3,r:{cores:5}},{m:6,r:{chips:1,shards:1}},{m:12,r:{credits:3000,cores:10}},{m:20,r:{chips:3,skin:1}}];
 const EXPEDITIONS = [
   {id:'e1',n:'Perimeter Sweep',t:15*60,cost:{iron_plate:30,iron_rod:20},find:.15,lvl:1},
   {id:'e2',n:'Ridge Survey',t:3600,cost:{reinforced_plate:6,cable:30},find:.3,lvl:2},
-  {id:'e3',n:'Deep Range',t:4*3600,cost:{frame:4,steel_pipe:30},find:.55,lvl:3},
-  {id:'e4',n:'Long Haul',t:8*3600,cost:{motor:4,plastic:40},find:.8,lvl:4},
+  {id:'e3',n:'Deep Range',req:'m_frame',t:4*3600,cost:{frame:4,steel_pipe:30},find:.55,lvl:3},
+  {id:'e4',n:'Long Haul',req:'m_oil',t:8*3600,cost:{motor:4,plastic:40},find:.8,lvl:4},
 ];
 const SKINS = {
   classic:{n:'Classic',belt:'#3a4049',edge:'#5d6776',chev:'#7f8a98'},
@@ -562,7 +564,7 @@ const SKINS = {
 };
 const WEEKLY_SKINS = ['hazard','frost','neon','brass'];
 
-// Recycler Exchange (Credits)
+// Reclaimer Exchange (Credits)
 const EXCHANGE = [
   {id:'chip',n:'Overclock Chip',d:'Push one machine +50% speed.',price:600,grow:1.25},
   {id:'cores3',n:'Data Core ×3',d:'Premium currency, earned slowly.',price:900,grow:1.15},
@@ -797,7 +799,11 @@ function runFor(sec){
 const canPay = c => Object.keys(c).every(k=>(S.inv[k]||0)+1e-6>=c[k]);
 function pay(c){for(const k in c) S.inv[k]-=c[k];}
 function refund(c){for(const k in c) S.inv[k]=(S.inv[k]||0)+c[k];}
-function missing(c){return Object.keys(c).filter(k=>(S.inv[k]||0)<c[k]).map(k=>`${Math.ceil(c[k]-(S.inv[k]||0))} ${ITEMS[k].n}`).join(', ');}
+function missing(c){return Object.keys(c).filter(k=>(S.inv[k]||0)<c[k]).map(k=>{ const m=lockedBy(k); return `${Math.ceil(c[k]-(S.inv[k]||0))} ${ITEMS[k].n}${m?` (research ${m.n})`:''}`; }).join(', ');}
+// research that first makes an item obtainable, while that research is still unfinished (null once you can make it)
+const LOCK={}; (()=>{ for(const u of BASE_UNLOCKS) if(u.startsWith('r:')) LOCK[Object.keys(RECIPES[u.slice(2)].out)[0]]=null; { const r=ZONES[0].r; for(const n of NODES) if(n.x>=r[0]&&n.x<=r[2]&&n.y>=r[1]&&n.y<=r[3]) LOCK[n.res]=null; }
+  for(const m of MILESTONES) for(const u of m.unl){ if(u.startsWith('r:')){ const o=Object.keys(RECIPES[u.slice(2)].out)[0]; if(!(o in LOCK)) LOCK[o]=m.id; } if(u.startsWith('z:')){ const r=ZONES[+u.slice(2)].r; for(const n of NODES) if(n.x>=r[0]&&n.x<=r[2]&&n.y>=r[1]&&n.y<=r[3]&&!(n.res in LOCK)) LOCK[n.res]=m.id; } } })();
+function lockedBy(it){ const id=LOCK[it]; return id&&!S.ms[id]?MS[id]:null; }
 
 // ---------- building ----------
 function canPlace(t,x,y){ const d=BUILDINGS[t], ti=tileInfo(x,y);
@@ -933,7 +939,7 @@ const clearTime = z => Math.min(12*3600, 30*Math.pow(2,Math.min(z,5))*Math.pow(1
 function clearTile(x,y){ const ti=tileInfo(x,y); if(ti.kind!=='obstacle'||ti.clearing) return; const c=clearCost(ti.z); if(!canPay(c)) return toast('Need '+missing(c),'bad'); pay(c);
   S.clears.push({id:'c'+x+'_'+y,x,y,job:{k:'clear',cost:c,dur:clearTime(ti.z)*1000,q:true,c:now()}}); startJobs(now()); emit('change'); }
 const SURVEY=[null,{cost:{reinforced_plate:20,rotor:10},t:8*3600},{cost:{frame:20,motor:5},t:2*86400}];
-function surveyNode(nid){ const n=allNodes().find(n=>n.id===nid); if(!n||n.res==='oil'&&false) return; if(!has('f:survey')) return toast('Research Scout Drones first','bad'); if(n.p>=2) return toast('Already Pure');
+function surveyNode(nid){ const n=allNodes().find(n=>n.id===nid); if(!n||n.res==='oil'&&false) return; if(!has('f:survey')) return toast('Research Scout Drones first','bad'); if(n.p>=2) return toast('Already Rich');
   if(S.surveys.some(s=>s.nid===nid)) return; const sv=SURVEY[n.p+1]; if(!canPay(sv.cost)) return toast('Need '+missing(sv.cost),'bad'); pay(sv.cost);
   S.surveys.push({id:'s'+nid,nid,x:n.x,y:n.y,job:{k:'survey',to:n.p+1,cost:sv.cost,dur:sv.t*jobMult()*1000,q:true,c:now()}}); startJobs(now()); toast('Survey queued','good'); emit('change'); }
 // ---------- alternate recipes ----------
@@ -981,7 +987,7 @@ function moveInto(cost,dep){ let moved=0; for(const k in cost){ const g=Math.min
 function deposit(id){ const d=S.dep[id]=S.dep[id]||{}; let mv=moveInto(MS[id].cost,d); const ns=(MS[id].shards||0)-(d.shards||0); if(ns>0&&S.shards>0){ const g=Math.min(S.shards,ns); S.shards-=g; d.shards=(d.shards||0)+g; mv+=g; } if(!mv) toast('Nothing to deposit yet'); if(depDone(id)&&freeSlot()) startMs(id); emit('change'); }
 function startMs(id){ if(msState(id)!=='ready') return; if(!freeSlot()) return toast('All research bays busy','bad');
   S.research.push({kind:'m',id,start:now(),end:now()+resDur('m',id)}); emit('change'); }
-function startUp(id){ const u=UP[id]; if(u.max&&lv(id)>=u.max) return toast('Maxed');
+function startUp(id){ const u=UP[id]; if(u.req&&!S.ms[u.req]) return toast('Research '+MS[u.req].n+' first','bad'); if(u.max&&lv(id)>=u.max) return toast('Maxed');
   if(S.research.some(r=>r.id===id)) return toast('Already researching'); if(!freeSlot()) return toast('All research bays busy','bad');
   const c=upCost(id); if(!canPay(c)) return toast('Need '+missing(c),'bad'); pay(c);
   S.research.push({kind:'u',id,start:now(),end:now()+resDur('u',id)}); emit('change'); }
@@ -1043,11 +1049,11 @@ function claimLogin(){ if(!canLogin()) return; const y=dayKey(now()-DAY); S.logi
 // pass
 const passTier = () => Math.min(PASS.tiers, Math.floor(S.pass.xp/PASS.xpPer));
 function passXP(x){ if(S.pass) S.pass.xp+=x; }
-function claimPass(track,i){ const P=S.pass; if(i>=passTier()) return; const L2=P[track]; if(L2.includes(i)) return; if(track==='prem'&&!P.premium) return toast('Unlock the Engineer Pass in the Store','bad');
+function claimPass(track,i){ const P=S.pass; if(i>=passTier()) return; const L2=P[track]; if(L2.includes(i)) return; if(track==='prem'&&!P.premium) return toast('Unlock the Frontier Pass in the Store','bad');
   L2.push(i); const r=PASS[track](i); grant(r); toast('Pass reward: '+rewardText(r),'good'); }
 
 // ---------- expeditions ----------
-function startExp(id){ if(!has('f:drone')) return; if(S.exped.length>=S.drones) return toast('All drones are out','bad'); const e=EXPEDITIONS.find(e=>e.id===id);
+function startExp(id){ if(!has('f:drone')) return; if(S.exped.length>=S.drones) return toast('All drones are out','bad'); const e=EXPEDITIONS.find(e=>e.id===id); if(e.req&&!S.ms[e.req]) return toast('Research '+MS[e.req].n+' first','bad');
   if(!canPay(e.cost)) return toast('Need '+missing(e.cost),'bad'); pay(e.cost); S.exped.push({id,end:now()+e.t*1000}); emit('change'); }
 function collectExp(i){ const x=S.exped[i]; if(!x||now()<x.end) return; const e=EXPEDITIONS.find(e=>e.id===x.id); S.exped.splice(i,1);
   const r={credits:Math.round(80*e.lvl*e.lvl*(0.8+Math.random()*.4)),cores:e.lvl+(Math.random()<.5?1:0)}; if(Math.random()<.2*e.lvl) r.chips=e.lvl>=4?2:1;
@@ -1097,7 +1103,7 @@ const GOALS = [
   {t:'Research → deliver parts for Field Operations', ok:()=>S.ms.m_field||msState('m_field')==='running'},
   {t:'Research Fasteners, then make Rivets', ok:()=>hasR('screw')},
   {t:'Research Copper Survey to reveal Copper Ridge', ok:()=>S.ms.m_copper},
-  {t:'Mine copper and produce Wire and Cable', ok:()=>hasR('wire')&&hasR('cable')},
+  {t:'Mine copper and make Copper Wire and Insulated Cable', ok:()=>hasR('wire')&&hasR('cable')},
   {t:'Research Masonry and produce Concrete', ok:()=>hasR('concrete')},
   {t:'Research Component Lines and build an Assembly Press', ok:()=>count('assembler')>=1},
   {t:'Make Hull Plating and deliver 25 to the Orbital Lift', ok:()=>S.lift.phase>=1||S.lift.build},
@@ -1146,7 +1152,7 @@ function buzz(ms){ try{ if(S.settings.haptics&&navigator.vibrate) navigator.vibr
 
 return { get S(){return S;}, RT, on, emit, toast, load, save, tick, simulate, runFor, exportSave, importSave, reset,
   has, zoneOpen, zoneOf, nodes, nodeAt, bAt, tileInfo, cap, mods, weeklyMod, count, lv, tier, powerOf, minerRate, ocMult,
-  canPay, missing, canPlace, place, demolish, setRecipe, overclock, upgradeMiner, MK_COST, toggle, HAND, craft, handMine,
+  canPay, missing, lockedBy, canPlace, place, demolish, setRecipe, overclock, upgradeMiner, MK_COST, toggle, HAND, craft, handMine,
   MS, UP, upCost, upTime, resDur, msState, depDone, deposit, startMs, startUp, rush, rushCost, liftDeposit, liftRush, launch,
   claimDrop, contractProg, shipContract, claimContract, reroll, weeklyProg, weeklyTarget, claimWeekly, canLogin, claimLogin,
   passTier, claimPass, seasonEnd, startExp, collectExp, buyEx, buyPrem, exPrice, iapGrant, addSkin, rewardText, goal,
@@ -1943,7 +1949,7 @@ const seg = (list,active) => `<div class="seg">${list.map(([k,l,dot])=>`<button 
 const who = key => MILESTONES.find(m=>m.unl.includes(key));
 const cr = n => `<span class="cur-c">${f(n)}</span>`, co = n => `<span class="cur-k">${f(n)}</span>`, ch = n => `<span class="cur-h">${f(n)}</span>`;
 function cost(c,dep){ return `<div class="cost">${Object.keys(c).map(k=>{ const inv=Math.floor((S().inv[k]||0)+1e-6), dp=dep?(dep[k]||0):0, need=c[k], left=Math.max(0,need-dp), ok=dp>=need||inv>=left;
-  return `<span class="ci ${ok?'ok':''}">${ic(k)}<b>${dep?`${f(Math.min(need,dp+inv))}/${f(need)}`:f(need)}</b><em>${ITEMS[k].n}${dp>0&&dp<need?` · ${f(dp)} delivered`:''}${!ok?` · have ${f(inv)}`:''}</em></span>`; }).join('')}</div>`; }
+  return `<span class="ci ${ok?'ok':''}">${ic(k)}<b>${dep?`${f(Math.min(need,dp+inv))}/${f(need)}`:f(need)}</b><em>${ITEMS[k].n}${dp>0&&dp<need?` · ${f(dp)} delivered`:''}${!ok?(G.lockedBy(k)?` · <i class="lk">needs ${G.lockedBy(k).n}</i>`:` · have ${f(inv)}`):''}</em></span>`; }).join('')}</div>`; }
 const covered=(c,dep)=>Object.keys(c).every(k=>(dep[k]||0)+Math.floor((S().inv[k]||0)+1e-6)>=c[k]);
 function unl(u){ const [t,k]=u.split(':');
   if(t==='b') return `<span class="tag">${ic(k,'b')}${BUILDINGS[k].n}</span>`;
@@ -2092,7 +2098,7 @@ SH.research = () => {
         (done?'<div class="muted sm">Unlocked. Pick it in the machine\'s Recipe tab.</div>':run?`<div class="muted">Analysing · ${ft((run.end-now())/1000)}</div>${bar((now()-run.start)/(run.end-run.start),'acc')}`:!ok?`<div class="lock">Requires ${G.MS[a.req].n}</div>`:cost(a.cost)+btn('Analyse · 1 Survey Log','startalt',{id},'pri wide',s.drives<1||!G.canPay(a.cost)||s.research.length>=s.slots))+'</div>'; }).join('');
   } else {
     if(!G.has('f:upgrades')) h += `<div class="card locked">Research <b>Process Science</b> (Era 1) to unlock repeatable upgrades.</div>`;
-    else h += UPGRADES.map(u=>{ const L=G.lv(u.id), max=u.max&&L>=u.max, run=s.research.some(r=>r.id===u.id), c=G.upCost(u.id);
+    else h += UPGRADES.map(u=>{ if(u.req&&!s.ms[u.req]) return `<div class="card locked"><div class="ttl">${u.n}</div><div class="desc">${u.d}</div><div class="lock">Research: ${G.MS[u.req].n}</div></div>`; const L=G.lv(u.id), max=u.max&&L>=u.max, run=s.research.some(r=>r.id===u.id), c=G.upCost(u.id);
       return `<div class="card"><div class="row"><div class="ttl grow">${u.n} <small>Lv ${L}${u.max?'/'+u.max:''}</small></div><span class="mono muted">${max?'':ft(G.upTime(u.id)/G.mods().research)}</span></div><div class="desc">${u.id==='u_belt'?`Now ${D.BELTS[L].n}: ${D.BELTS[L].cap}/min per machine${max?'':` → ${D.BELTS[L+1].n}: ${D.BELTS[L+1].cap}/min`}`:u.d}</div>${max?'<div class="muted">Maxed</div>':run?'<div class="muted">Researching…</div>':cost(c)+btn('Start','startup',{id:u.id},'pri wide',!G.canPay(c)||s.research.length>=s.slots)}</div>`; }).join('');
   }
   return {title:'Research', tabs:seg([['ms','Projects'],['up','Upgrades'],['alt','Variants'],['st','Shard Tech']],tab), body:h};
@@ -2137,7 +2143,7 @@ SH.ops = () => {
     if(!G.has('f:drone')) h += `<div class="card locked">Research <b>Scout Drones</b> (Era 1) to send timed expeditions that return loot and discover new resource nodes.</div>`;
     else { h += `<div class="muted">Drones out ${s.exped.length}/${s.drones}</div>`;
       h += s.exped.map((x,i)=>{ const e=EXPEDITIONS.find(e=>e.id===x.id), ready=now()>=x.end; return `<div class="card row"><div class="grow"><div class="ttl">${e.n}</div>${ready?'<div class="muted">Returned</div>':`<div class="muted">Back in ${ft((x.end-now())/1000)}</div>${bar(1-(x.end-now())/(e.t*1000),'acc')}`}</div>${ready?btn('Collect','collect',{i},'pri'):''}</div>`; }).join('');
-      h += EXPEDITIONS.map(e=>`<div class="card"><div class="row"><div class="ttl grow">${e.n}</div><span class="mono muted">${ft(e.t)}</span></div><div class="desc">${Math.round(e.find*100)}% chance to discover a new node · loot tier ${e.lvl}</div>${cost(e.cost)}${btn('Launch drone','exp',{id:e.id},'pri wide',s.exped.length>=s.drones||!G.canPay(e.cost))}</div>`).join(''); }
+      h += EXPEDITIONS.map(e=>e.req&&!s.ms[e.req]?`<div class="card locked"><div class="row"><div class="ttl grow">${e.n}</div><span class="mono muted">${ft(e.t)}</span></div><div class="lock">Research: ${G.MS[e.req].n}</div></div>`:`<div class="card"><div class="row"><div class="ttl grow">${e.n}</div><span class="mono muted">${ft(e.t)}</span></div><div class="desc">${Math.round(e.find*100)}% chance to discover a new node · loot tier ${e.lvl}</div>${cost(e.cost)}${btn('Launch drone','exp',{id:e.id},'pri wide',s.exped.length>=s.drones||!G.canPay(e.cost))}</div>`).join(''); }
   }
   return {title:'Operations', tabs:seg([['daily','Daily',B.daily],['weekly','Weekly',B.weekly],['pass','Pass',B.pass],['drones','Drones',B.drones]],tab), body:h};
 };

@@ -1192,6 +1192,8 @@ function beltStep(x,y){ const bm=beltMode; if(!bm) return; const sf=G.srcFoot(bm
   // dragging only lays tiles; a target is chosen by tapping it (handled in UI onTap)
   if(G.walkable(x,y)&&!bm.path.some(p=>p[0]===x&&p[1]===y)){ bm.path.push([x,y]); onBelt&&onBelt(); } }
 let onBelt=null;
+// a machine looks 'on' (glow, smoke, motion) whenever it is actually producing, even if its inputs only trickle in
+const isOn=b=>!b.off&&!(b.job&&b.job.k==='build')&&(b._s==='run'||b._s==='low'||(b._or||0)>.01||(b._load||0)>.01);
 let ovl=[], ports=new Map(), beltById=new Map(); // overlay pass: timers, badges and warnings draw above every structure
 let stat=null, needStatic=true, belts=[], parts=[], floats=[], validTiles=null, placing=null, sel=null, onTap=null, time=0, lastF=0;
 const img={};
@@ -1339,7 +1341,7 @@ const UPH=24;
 function beltStyle(){ const ti=Math.min(G.lv('u_belt'),D.BELTS.length-1), BT=D.BELTS[ti], sk0=SKINS[G.S.skin]||SKINS.classic; return {BT,sk:G.S.skin==='classic'?{belt:mixHex('#2f353d',BT.c,.18),edge:BT.c,chev:mixHex(BT.c,'#ffffff',.35)}:sk0,sp:BT.spd*2,bw:7+ti}; }
 function beltItems(c,e,st,pred){ const rate=e.bl._r||0; if(rate<=.05) return; const its=e.bl._it&&!e.feed?[e.bl._it]:e.its.length?e.its:[e.bl._it]; if(!its[0]||!ITEMS[its[0]]) return;
   const gap=Math.max(12,Math.min(140,st.sp*60/rate)), off=(time*st.sp)%gap; let k=0;
-  for(let d=off; d<e.len-8; d+=gap){ const it=its[k++%its.length]; if(!ITEMS[it]) continue; const [x,y,kd,si]=along(e,d); if(!pred(kd,si)) continue; const col=ITEMS[it].c; c.fillStyle=shade(col,-.5); c.fillRect(x-4,y-6,8,8); c.fillStyle=col; c.fillRect(x-3,y-5,6,6); } }
+  for(let d=off; d<e.len-8; d+=gap){ const it=its[k++%its.length]; if(!ITEMS[it]) continue; const [x,y,kd,si]=along(e,d); if(!pred(kd,si)) continue; c.fillStyle='rgba(0,0,0,.22)'; c.beginPath(); c.ellipse(x+1,y+1,5.5,2.6,0,0,7); c.fill(); drawItem(c,it,x,y-3,st.bw+6); } }
 function drawBelts(c){ const st=beltStyle(), {sk,sp,bw}=st;
   c.lineJoin='round'; c.lineCap='round';
   const path=(e,P,ox=0,oy=0,K='g')=>{ c.beginPath(); for(let k=0;k<e.kind.length;k++){ if(e.kind[k]!==K) continue; c.moveTo(P[k][0]+ox,P[k][1]+oy); c.lineTo(P[k+1][0]+ox,P[k+1][1]+oy); } };
@@ -1390,7 +1392,7 @@ function bolt(c,a,b,col){ c.strokeStyle=col; c.lineWidth=1.5; c.beginPath(); c.m
 function ring(c,X,Y,r,col,rot,seg=8){ c.strokeStyle=col; c.lineWidth=3; for(let i=0;i<seg;i++){ const a0=rot+i*Math.PI*2/seg; c.beginPath(); c.ellipse(X,Y,r,r*.38,0,a0,a0+Math.PI*2/seg*.65); c.stroke(); } }
 // returns screen Y of the structure's top
 function drawIsoArt(c,b,dt,still){
-  const t=still?0:time, run=!still&&(b._s==='run'||b._s==='low'), lv=b.lv||1, asc=b.asc||0, stg=lv>=10?3:lv>=7?2:lv>=4?1:0, AC=asc?D.LEVELS.ASC[asc-1].c:null;
+  const t=still?0:time, run=!still&&isOn(b), lv=b.lv||1, asc=b.asc||0, stg=lv>=10?3:lv>=7?2:lv>=4?1:0, AC=asc?D.LEVELS.ASC[asc-1].c:null;
   const trim=AC||STG_TRIM[stg], body=col=>asc?mixHex(col,AC,.35+.1*asc):col, hz=(time*6|0)%2;
   [AX,AY]=iso(b.x,b.y);
   // concrete pad with tier-coloured rim
@@ -1523,7 +1525,7 @@ function drawBuilding(c,b,dt){
   drawPorts(c,b.id,false,b.t);
   if(building){ const p=job.q?0:Math.min(1,(Date.now()-job.s)/(job.e-job.s)); drawConstruct(c,b,sp,p,job.q,dt);
     const ry=ctr[1]-(BH[b.t]||24)-44; ovl.push(()=>{ badge(c,ctr[0],ry,13); c.strokeStyle=job.q?'#7a8494':'#6cc3e0'; c.lineWidth=3; c.beginPath(); c.arc(ctr[0],ry,10,-Math.PI/2,-Math.PI/2+Math.PI*2*(job.q?1:p)); c.stroke(); }); return; }
-  const run=b._s==='run'||b._s==='low';
+  const run=isOn(b);
   const lv=b.lv||1, asc=b.asc||0, stg=lv>=10?4:lv>=7?3:lv>=4?2:1, AC=asc?D.LEVELS.ASC[asc-1].c:null, pl=.55+.45*Math.sin(time*2.5+b.id), trim=AC||STG_TRIM[stg-1];
   if(asc){ c.save(); c.globalCompositeOperation='lighter'; c.globalAlpha=.2+.16*pl; c.fillStyle=AC; dia(c,x,y,1,1,-.2); c.fill(); c.restore();
     c.strokeStyle=hexA(AC,.55+.45*pl); c.lineWidth=1.5+asc; dia(c,x,y,1,1,-.2); c.stroke();
@@ -1707,7 +1709,7 @@ function frame(ts){
     c.strokeStyle='#e9a23b'; c.lineWidth=3; for(const [fx,fy] of G.srcFoot(src)){ dia(c,fx,fy,1,1,.02); c.stroke(); } }
   const list=G.S.buildings.filter(b=>vis(b.x,b.y));
   { const dk=Math.max(0,Math.min(1,(-Math.cos((Date.now()/1000%720)/720*Math.PI*2)-.15)/.85))*.42;   // night: light pools on the ground, under the models
-    if(dk>.01){ c.save(); c.globalCompositeOperation='lighter'; for(const b of list){ if(b._s!=='run'&&b._s!=='low') continue; const warm=['smelter','foundry','burner','coal_gen','refinery'].includes(b.t), p=iso(b.x+.5,b.y+.5), fl=warm?.85+.15*Math.sin(time*9+b.id*3)*Math.sin(time*5.3+b.id):1;
+    if(dk>.01){ c.save(); c.globalCompositeOperation='lighter'; for(const b of list){ if(!isOn(b)) continue; const warm=['smelter','foundry','burner','coal_gen','refinery'].includes(b.t), p=iso(b.x+.5,b.y+.5), fl=warm?.85+.15*Math.sin(time*9+b.id*3)*Math.sin(time*5.3+b.id):1;
       c.globalAlpha=Math.min(1,dk*3.2*fl); c.save(); c.translate(p[0],p[1]+4); c.scale(1,.5); glowPool(c,0,0,TW*1.1,warm); c.restore(); }
       const cp=iso(CORE.x+1,CORE.y+1); c.globalAlpha=Math.min(1,dk*2.6); c.translate(cp[0],cp[1]+4); c.scale(1,.5); glowPool(c,0,0,TW*2.1,false); c.restore(); } }
   const objs=list.map(b=>({k:b.x+b.y,f:()=>drawBuilding(c,b,dt)}));
@@ -1736,7 +1738,7 @@ function frame(ts){
     c.save(); c.setTransform(dpr,0,0,dpr,0,0); if(!lightG||lightG.w!==vw||lightG.h!==vh) mkLightG(); c.fillStyle=lightG.sun; c.fillRect(0,0,vw,vh); c.fillStyle=lightG.vig; c.fillRect(0,0,vw,vh); c.restore(); }
   const dp=(Date.now()/1000%720)/720, dark=Math.max(0,Math.min(1,(-Math.cos(dp*Math.PI*2)-.15)/.85))*.42;
   if(dark>.01){ c.save(); c.setTransform(dpr,0,0,dpr,0,0); c.fillStyle=`rgba(10,16,40,${dark})`; c.fillRect(0,0,vw,vh); c.restore();
-    c.globalCompositeOperation='lighter'; for(const b of list){ if(b._s!=='run'&&b._s!=='low') continue; const warm=['smelter','foundry','burner','coal_gen','refinery'].includes(b.t), x=b.x, y=b.y, p=iso(x+.5,y+.5), Hh=(BH[b.t]||24)+10+((b.asc||0)?20:0);
+    c.globalCompositeOperation='lighter'; for(const b of list){ if(!isOn(b)) continue; const warm=['smelter','foundry','burner','coal_gen','refinery'].includes(b.t), x=b.x, y=b.y, p=iso(x+.5,y+.5), Hh=(BH[b.t]||24)+10+((b.asc||0)?20:0);
       const fl=warm?.85+.15*Math.sin(time*9+b.id*3)*Math.sin(time*5.3+b.id):1;
       const em=EMIS[b.t]; if(em){ [AX,AY]=iso(x,y); for(const [u,v,h,w,f] of em){ const q=P(u,v,h); c.globalAlpha=dark*1.4*fl; c.save(); c.translate(q[0],q[1]); c.scale(1,.45); glowPool(c,0,0,w,f!=='l'); c.restore(); } } }
     for(const o of G.S.decor||[]){ if((o.t!=='lamp'&&o.t!=='beacon')||!vis(o.x,o.y)) continue; const p=iso(o.x+.5,o.y+.5); c.globalAlpha=dark*(o.t==='lamp'?1.8:1.1); c.drawImage(o.t==='lamp'?lightW:lightC,p[0]-TW*1.1,p[1]-TW*.9,TW*2.2,TW*1.8); }
@@ -1750,7 +1752,7 @@ function emit(x,y,kind,rate,dt){ if(noEmit) return; if(parts.length<350&&Math.ra
 function box(c,x,y,w,h,top,d=7){ c.fillStyle='rgba(0,0,0,.22)'; rr(c,x+3,y+4,w,h,4); c.fill(); c.fillStyle=shade(top,-.35); rr(c,x,y,w,h,4); c.fill(); c.fillStyle=top; rr(c,x,y,w,h-d,4); c.fill(); c.strokeStyle=shade(top,-.5); c.lineWidth=1; rr(c,x+.5,y+.5,w-1,h-1,4); c.stroke(); }
 function fan(c,x,y,r,a,col){ c.fillStyle='#22262b'; c.beginPath(); c.arc(x,y,r,0,7); c.fill(); c.fillStyle=col; for(let i=0;i<3;i++){ c.save(); c.translate(x,y); c.rotate(a+i*2.094); c.beginPath(); c.ellipse(r*.45,0,r*.45,r*.2,0,0,7); c.fill(); c.restore(); } }
 function drawBuildingArt(c,b,px,py,dt,still){
-  const run=!still&&(b._s==='run'||b._s==='low'), t=still?0:time, m=5, x=px+m, y=py+m, s=T-2*m;
+  const run=!still&&isOn(b), t=still?0:time, m=5, x=px+m, y=py+m, s=T-2*m;
   const sp=spr('buildings/'+b.t);
   c.fillStyle='#7d838b'; c.fillRect(px+1,py+1,T-2,T-2); c.strokeStyle='#5f656d'; c.strokeRect(px+1.5,py+1.5,T-3,T-3);
   switch(b.t){

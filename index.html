@@ -410,7 +410,7 @@ const BUILDINGS = {
   pump:{n:'Crude Pump',bt:300,cat:'Extraction',p:32,cost:{motor:6,steel_pipe:20,concrete_beam:8},d:'Place on an oil node.',node:'oil'},
   smelter:{n:'Smelting Furnace',bt:5,cat:'Production',p:3,cost:{iron_plate:4,iron_rod:8},d:'Ore into ingots.'},
   constructor:{n:'Fabricator',bt:8,cat:'Production',p:5,cost:{iron_plate:6,iron_rod:6},d:'One input, one output.'},
-  assembler:{n:'Assembly Press',bt:30,cat:'Production',p:12,cost:{reinforced_plate:6,rotor:4,cable:10},d:'Two inputs into advanced parts.'},
+  assembler:{n:'Assembly Press',bt:30,cat:'Production',p:12,cost:{iron_plate:40,screw:60,cable:20},d:'Two inputs into advanced parts.'},
   foundry:{n:'Alloy Furnace',bt:90,cat:'Production',p:18,cost:{reinforced_plate:20,rotor:10,concrete:60},d:'Alloys ore with coal.'},
   refinery:{n:'Cracking Plant',bt:300,cat:'Production',p:24,cost:{motor:8,concrete_beam:10,steel_pipe:30},d:'Cracks crude oil.'},
   manufacturer:{n:'Production Complex',bt:600,cat:'Production',p:48,cost:{motor:10,frame:20,plastic:50,cable:50},d:'Up to four inputs. Late-game parts.'},
@@ -1099,7 +1099,7 @@ const GOALS = [
   {t:'Research Copper Survey to reveal Copper Ridge', ok:()=>S.ms.m_copper},
   {t:'Mine copper and produce Wire and Cable', ok:()=>hasR('wire')&&hasR('cable')},
   {t:'Research Masonry and produce Concrete', ok:()=>hasR('concrete')},
-  {t:'Research Part Assembly and build an Assembly Press', ok:()=>count('assembler')>=1},
+  {t:'Research Component Lines and build an Assembly Press', ok:()=>count('assembler')>=1},
   {t:'Make Hull Plating and deliver 25 to the Orbital Lift', ok:()=>S.lift.phase>=1||S.lift.build},
 ];
 function goal(){ for(const g of GOALS) if(!g.ok()) return g;

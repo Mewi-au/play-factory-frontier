@@ -362,7 +362,7 @@ const BUILDINGS = {
   coal_gen:{warm:300,n:'Coal Boiler',bt:90,cat:'Power',gen:60,fuel:{coal:10},cost:{reinforced_plate:10,rotor:5,cable:30},d:'60 MW. Burns coal as load needs.'},
   fuel_gen:{warm:600,n:'Combustion Turbine',bt:600,cat:'Power',gen:130,fuel:{fuel:9},cost:{computer:4,heavy_frame:2,rubber:40},d:'130 MW. Burns refined fuel.'},
   geo_gen:{warm:1800,n:'Geyser Tap',bt:900,cat:'Power',gen:120,cost:{motor:8,heavy_frame:2,concrete_beam:20},d:'Place on a geyser. Free power scaled by purity.',node:'geyser'},
-  drone_port:{n:'Courier Pad',bt:3600,cat:'Logistics',p:10,cost:{iron_plate:60,screw:100,wire:80},d:'Machines outside Landing Meadow run at 50% until their zone has a Courier Pad.'},
+  drone_port:{n:'Power Relay',bt:3600,cat:'Power',cost:{iron_plate:60,screw:100,wire:80},d:'Links this zone to your main power grid. Zones without one only get power from generators built inside them.'},
   storage:{n:'Storage Silo',bt:12,cat:'Logistics',cost:{iron_plate:20,iron_rod:20},d:'+200 capacity for every item.'},
   splitter:{n:'Belt Divider',bt:20,cat:'Logistics',router:1,cost:{iron_plate:10,screw:20},d:'1 belt in, up to 3 out. Splits items evenly across its outputs.'},
   merger:{n:'Belt Combiner',bt:20,cat:'Logistics',router:1,cost:{iron_plate:10,screw:20},d:'Up to 3 belts in, 1 out. Combines lines onto one belt.'},
@@ -652,46 +652,50 @@ function simulate(dt){
   let recVal=0; const sinkItem=(i,a)=>{ recVal+=a*ITEMS[i].v; };
   const sinking=i=>recyc&&S.sink[i]!==false;
   const inB=new Map(); for(const bl of S.belts){ if(!inB.has(bl.to)) inB.set(bl.to,[]); inB.get(bl.to).push(bl); }
-  // ---- power ----
-  let dem=0;
-  for(const b of B){ if(b.off) continue; const d=BUILDINGS[b.t]; if(!d.p) continue; if(d.cat==='Production'&&(!b.r||!connected(b))) continue; dem+=powerOf(b); }
-  let free=0, capT=0;
+  // ---- power grids: Landing Meadow plus every zone with a working Power Relay form the main grid;
+  //      any other zone is an island that only gets power from generators built inside it ----
+  const relayZ=new Set(B.filter(b=>b.t==='drone_port'&&!b.off).map(b=>zoneOf(b.x,b.y)));
+  const gid=b=>{ const z=zoneOf(b.x,b.y); return z<=0||relayZ.has(z)?'main':'z'+z; };
+  const GR={main:{dem:0,free:0,cap:0,gen:0,need:0}}, gr=k=>GR[k]||(GR[k]={dem:0,free:0,cap:0,gen:0,need:0});
+  for(const b of B){ b._grid=gid(b); const d=BUILDINGS[b.t]; if(b.off||!d.p) continue; if(d.cat==='Production'&&(!b.r||!connected(b))) continue; gr(b._grid).dem+=powerOf(b); }
   for(const b of S.buildings){ const d=BUILDINGS[b.t]; if(d.warm&&(b.off||!built(b))) b.warm=Math.max(0,(b.warm||0)-dt/d.warm*2); }
   for(const b of B){ const d=BUILDINGS[b.t]; if(!d.gen||d.fuel) continue; if(b.off){b._s='off';continue;}
-    b.warm=Math.min(1,(b.warm||0)+dt/(d.warm||1)); let g=d.gen*M.power*bMult(b)*b.warm; if(b.t==='geo_gen'){const n=nodeAt(b.x,b.y); g*=n?PURITY[n.p].m:0;} free+=g; capT+=g; b._s='run'; b._load=1; }
-  let need=Math.max(0,dem-free), gen=free;
-  for(const b of B){ const d=BUILDINGS[b.t]; if(!d.gen||!d.fuel) continue; if(b.off){b._s='off';continue;}
+    b.warm=Math.min(1,(b.warm||0)+dt/(d.warm||1)); let g=d.gen*M.power*bMult(b)*b.warm; if(b.t==='geo_gen'){const n=nodeAt(b.x,b.y); g*=n?PURITY[n.p].m:0;} const G0=gr(b._grid); G0.free+=g; G0.cap+=g; b._s='run'; b._load=1; }
+  for(const k in GR){ const g0=GR[k]; g0.need=Math.max(0,g0.dem-g0.free); g0.gen=g0.free; }
+  for(const b of B){ const d=BUILDINGS[b.t]; if(!d.gen||!d.fuel) continue; if(b.off){b._s='off';continue;} const G0=gr(b._grid);
     const fi=Object.keys(d.fuel)[0], fr=d.fuel[fi], have=b.ib[fi]||0; b._noin=!(inB.get(b.id)||[]).length;
     b.warm=have>0?Math.min(1,(b.warm||0)+dt/d.warm):Math.max(0,(b.warm||0)-dt/d.warm*2);
-    const g=Math.max(1e-6,d.gen*M.power*bMult(b)*b.warm); if(have>0) capT+=g;
-    const want=Math.min(g,need); if(want<=0){b._load=0;b._s=have>0?'idle':b._noin?'noinput':'starve';continue;}
+    const g=Math.max(1e-6,d.gen*M.power*bMult(b)*b.warm); if(have>0) G0.cap+=g;
+    const want=Math.min(g,G0.need); if(want<=0){b._load=0;b._s=have>0?'idle':b._noin?'noinput':'starve';continue;}
     const f=want/g, fn=fr*f*dt/60, ratio=Math.min(1,have/fn);
-    b.ib[fi]=Math.max(0,have-fn*ratio); const got=want*ratio; gen+=got; need-=got; b._load=f*ratio; b._s=ratio<.999?(b._noin?'noinput':'starve'):'run';
+    b.ib[fi]=Math.max(0,have-fn*ratio); const got=want*ratio; G0.gen+=got; G0.need-=got; b._load=f*ratio; b._s=ratio<.999?(b._noin?'noinput':'starve'):'run';
   }
-  const pf = dem>0?Math.min(1,gen/dem):1;
-  const ports=new Set(B.filter(b=>b.t==='drone_port'&&!b.off).map(b=>zoneOf(b.x,b.y))); const zf=b=>{ const z=zoneOf(b.x,b.y); b._zone=z>0&&!ports.has(z); return b._zone?.5:1; };
-  RT.power={cap:capT,gen,dem,f:pf};
+  for(const k in GR){ const g0=GR[k]; g0.f=g0.dem>0?Math.min(1,g0.gen/g0.dem):1; }
+  const pf=GR.main.f, pfb=b=>GR[b._grid].f, island=b=>b._grid!=='main'&&GR[b._grid].cap<=0;
+  const zf=()=>1;
+  RT.power={cap:GR.main.cap,gen:GR.main.gen,dem:GR.main.dem,f:pf}; RT.grids=GR;
+  for(const b of B) if(b.t==='drone_port') b._s=b.off?'off':'run';
   const obSum=b=>Object.values(b.ob).reduce((a,v)=>a+v,0);
   // ---- production (inputs come only from each machine's own buffer) ----
   for(const b of B){ if(b.t!=='miner'&&b.t!=='pump') continue; if(b.off){b._s='off';continue;}
     const n=nodeAt(b.x,b.y); if(!n){b._s='off';continue;}
     if(!connected(b)){ b._s='nobelt'; b._or=0; continue; }
-    let rate=minerRate(b,M)*pf*zf(b); b._belt=rate>bc+1e-6; rate=Math.min(rate,bc);
+    let rate=minerRate(b,M)*pfb(b); b._belt=rate>bc+1e-6; rate=Math.min(rate,bc);
     const a=Math.max(0,Math.min(rate*dt/60,outCap(b)-obSum(b)));
     if(a>0){ b.ob[n.res]=(b.ob[n.res]||0)+a; made(n.res,a); b._acc=(b._acc||0)+a; } b._or=a/dt*60; b._t=Date.now();
-    b._s = a<=1e-9?'full':pf<.999?'low':'run';
+    b._s = island(b)?'nogrid':a<=1e-9?'full':pfb(b)<.999?'low':'run';
   }
   for(const b of B){ if(!b.r) continue; if(b.off){b._s='off';continue;}
     if(!connected(b)){ b._s='nobelt'; b._or=0; continue; }
-    const R=RECIPES[b.r]; let sp=M.proc*bMod(M,b.t)*ocMult(b)*bMult(b)*M.glob*pf*zf(b); const mx=Math.max(...Object.values(R.in),...Object.values(R.out))*sp; b._belt=mx>bc+1e-6; if(b._belt) sp*=bc/mx;
-    const fr=sp*dt/60; if(!(fr>0)){ b._s='low'; b._or=0; continue; }
+    const R=RECIPES[b.r]; let sp=M.proc*bMod(M,b.t)*ocMult(b)*bMult(b)*M.glob*pfb(b); const mx=Math.max(...Object.values(R.in),...Object.values(R.out))*sp; b._belt=mx>bc+1e-6; if(b._belt) sp*=bc/mx;
+    const fr=sp*dt/60; if(!(fr>0)){ b._s=island(b)?'nogrid':'low'; b._or=0; continue; }
     let f=1, why='run'; const hasIn=(inB.get(b.id)||[]).length>0;
     for(const i in R.in){ const q=(b.ib[i]||0)/(R.in[i]*fr); if(q<f){ f=q; why=hasIn?'starve':'noinput'; } }
     for(const o in R.out){ const q=Math.max(0,outCap(b)-(b.ob[o]||0))/(R.out[o]*fr); if(q<f){ f=q; why='full'; } }
     f=Math.max(0,Math.min(1,f));
     if(f>0){ for(const i in R.in) b.ib[i]=Math.max(0,(b.ib[i]||0)-R.in[i]*fr*f); for(const o in R.out){ const a=R.out[o]*fr*f; b.ob[o]=(b.ob[o]||0)+a; made(o,a); } }
     const po=Object.keys(R.out)[0]; b._acc=(b._acc||0)+R.out[po]*fr*f; b._or=R.out[po]*fr*f/dt*60; b._t=Date.now();
-    b._f=f; b._s = f<=1e-6?why : f<.95?(why==='run'?'low':why) : pf<.999?'low':'run';
+    b._f=f; b._s = island(b)?'nogrid' : f<=1e-6?why : f<.95?(why==='run'?'low':why) : pfb(b)<.999?'low':'run';
   }
   // ---- belts move items between buffers, stock and the reclaimer ----
   const accept=(to,i)=>{ if(to==='core') return sinking(i)?Infinity:Math.max(0,c-(inv[i]||0)); const t=S.buildings.find(x=>x.id===to); if(!t||!built(t)||t.off) return 0;
@@ -1257,7 +1261,7 @@ function prism(c,x,y,w,h,Hh,col,ins=.1){ const a=iso(x+ins,y+ins),b=iso(x+w-ins,
   c.fillStyle=shade(col,-.46); poly(c,[d,b,[b[0],b[1]-Hh],[d[0],d[1]-Hh]]); c.fill();
   c.fillStyle=col; poly(c,[[a[0],a[1]-Hh],[b[0],b[1]-Hh],[d[0],d[1]-Hh],[e[0],e[1]-Hh]]); c.fill(); c.strokeStyle=shade(col,-.55); c.lineWidth=1; c.stroke(); }
 function roof(c,x,y,Hh,fn){ const o=iso(x,y); c.save(); c.transform(TW/2/T,TH/2/T,-TW/2/T,TH/2/T,o[0],o[1]-Hh); fn(); c.restore(); }
-const BH={miner:20,pump:16,smelter:26,constructor:24,assembler:28,foundry:30,refinery:30,manufacturer:36,burner:12,coal_gen:30,fuel_gen:30,geo_gen:22,storage:42,recycler:26,splitter:14,merger:14};
+const BH={drone_port:60,miner:20,pump:16,smelter:26,constructor:24,assembler:28,foundry:30,refinery:30,manufacturer:36,burner:12,coal_gen:30,fuel_gen:30,geo_gen:22,storage:42,recycler:26,splitter:14,merger:14};
 const BC={miner:'#41464e',pump:'#3d4148',smelter:'#9a5a40',constructor:'#4e6a8c',assembler:'#3f8079',foundry:'#3b3735',refinery:'#585e66',manufacturer:'#62578a',burner:'#6b5a45',coal_gen:'#474a50',fuel_gen:'#b8723a',geo_gen:'#6d7f86',storage:'#9aa3ad',recycler:'#6a4f7e',splitter:'#3f4a57',merger:'#3f4a57'};
 const SMOKE={smelter:'s',foundry:'d',coal_gen:'d',burner:'s',geo_gen:'w'};
 // draw a sprite standing on a w×h footprint, bottom vertex anchored
@@ -1431,8 +1435,14 @@ function drawIsoArt(c,b,dt,still){
       band(c,.3,.3,.3,.3,0,0,trim); const [X,Y]=P(.5,.5,30); c.strokeStyle=trim; c.lineWidth=3; c.beginPath(); c.ellipse(X,Y,26,13,0,0,Math.PI); c.stroke(); cone(c,.5,.5,26,6,60,74,body('#b5bdc6')); top=s[1]-14; break; }
     case 'recycler': { blk(c,.12,.12,.88,.88,4,20,body('#6a4f7e')); band(c,.12,.12,.88,.88,6,3,trim); cone(c,.5,.5,10,24,20,40,body('#8a6ba3')); const [X,Y]=P(.5,.5,40);
       c.strokeStyle='#e0c2ff'; c.lineWidth=2; for(let i=0;i<3;i++){ const a=(run?t*3:0)+i*2.1; c.beginPath(); c.ellipse(X,Y,16,8,0,a,a+1.2); c.stroke(); } top=Y-6; break; }
-    case 'drone_port': { blk(c,.06,.06,.94,.94,4,10,body('#5a6370')); band(c,.06,.06,.94,.94,4,3,trim); c.strokeStyle='#e9c46a'; c.lineWidth=2; const a=P(.3,.35,10),b2=P(.3,.65,10),c2=P(.6,.35,10),d=P(.6,.65,10),m1=P(.3,.5,10),m2=P(.6,.5,10);
-      c.beginPath(); c.moveTo(...a); c.lineTo(...b2); c.moveTo(...c2); c.lineTo(...d); c.moveTo(...m1); c.lineTo(...m2); c.stroke(); blk(c,.74,.1,.92,.28,10,42,body('#6d7680')); const bc=P(.83,.19,46); glowDot(c,bc[0],bc[1],2.5,(time*2|0)%2?'#6cc3e0':'#2a4a5a'); top=bc[1]-4; break; }
+    case 'drone_port': { // power relay pylon
+      blk(c,.28,.28,.72,.72,4,9,'#8e959e'); const H=60, L=[[.33,.33],[.67,.33],[.67,.67],[.33,.67]], T=[[.46,.46],[.54,.46],[.54,.54],[.46,.54]];
+      const lp=(i,f)=>P(L[i][0]+(T[i][0]-L[i][0])*f,L[i][1]+(T[i][1]-L[i][1])*f,9+f*(H-9));
+      c.lineCap='round'; for(const [i,w,col] of [[0,2,'#7d858f'],[1,2.2,'#8f98a2'],[3,2.2,'#a7b0ba'],[2,2.6,'#c3cad2']]){ const a=lp(i,0), b2=lp(i,1); c.strokeStyle=col; c.lineWidth=w; c.beginPath(); c.moveTo(a[0],a[1]); c.lineTo(b2[0],b2[1]); c.stroke(); }
+      c.strokeStyle='#8f98a2'; c.lineWidth=1; for(let k=0;k<4;k++){ const f0=k/4, f1=(k+1)/4; for(const [i,j2] of [[3,2],[2,1]]){ const a=lp(i,f0), b2=lp(j2,f1), a2=lp(j2,f0), b3=lp(i,f1); c.beginPath(); c.moveTo(a[0],a[1]); c.lineTo(b2[0],b2[1]); c.moveTo(a2[0],a2[1]); c.lineTo(b3[0],b3[1]); c.stroke(); } }
+      const x0=P(.12,.5,H-12), x1=P(.88,.5,H-12); c.strokeStyle='#c3cad2'; c.lineWidth=2.5; c.beginPath(); c.moveTo(x0[0],x0[1]); c.lineTo(x1[0],x1[1]); c.stroke();
+      for(const q of [x0,x1]){ c.fillStyle='#4fb8b0'; for(let k=0;k<3;k++){ c.beginPath(); c.ellipse(q[0],q[1]+2+k*3,3,1.4,0,0,7); c.fill(); } }
+      const tp=P(.5,.5,H); glowDot(c,tp[0],tp[1]-3,3,'#4fb8b0',run?.6+.4*Math.sin(t*3+b.id):.2); top=tp[1]-6; break; }
     case 'splitter': case 'merger': { const ac=b.t==='splitter'?'#e9a23b':'#6cc3e0'; blk(c,.2,.2,.8,.8,4,14,body('#3f4a57')); band(c,.2,.2,.8,.8,9,2,ac);
       const C=P(.5,.5,14), ends=[[.5,.24],[.76,.5],[.5,.76],[.24,.5]].map(([u,v])=>P(u,v,14)); c.strokeStyle=ac; c.lineWidth=2.5;
       for(const q of ends){ c.beginPath(); c.moveTo(C[0],C[1]); c.lineTo(q[0],q[1]); c.stroke(); }
@@ -1454,10 +1464,10 @@ function drawIsoArt(c,b,dt,still){
 }
 
 // ---------- objects ----------
-const WARN={noinput:{c:'#e2665a',g:'!'},nobelt:{c:'#e2665a',g:'!'},full:{c:'#e9a23b',g:'■'},starve:{c:'#e9c46a',g:'?'},low:{c:'#e9c46a',g:'ϟ'}};
+const WARN={nogrid:{c:'#e2665a',g:'ϟ'},noinput:{c:'#e2665a',g:'!'},nobelt:{c:'#e2665a',g:'!'},full:{c:'#e9a23b',g:'■'},starve:{c:'#e9c46a',g:'?'},low:{c:'#e9c46a',g:'ϟ'}};
 // emissive spots (windows, furnace mouths) that bloom at night: [u,v,height,radius,cool?]
 const EMIS={smelter:[[.5,.88,12,22]],constructor:[[.5,.9,15,26,'l']],foundry:[[.5,.9,14,24]],burner:[[.5,.5,10,20]],refinery:[[.5,.9,12,18]],coal_gen:[[.5,.9,12,18]],assembler:[[.3,.93,16,14,'l'],[.7,.93,16,14,'l']],manufacturer:[[.5,.95,20,26,'l']]};
-const SC={noinput:'#e2665a',nobelt:'#e2665a',run:'#7cc68b',low:'#e9c46a',starve:'#e9c46a',full:'#e2665a',off:'#7a8494',idle:'#8c99a8'};
+const SC={nogrid:'#e2665a',noinput:'#e2665a',nobelt:'#e2665a',run:'#7cc68b',low:'#e9c46a',starve:'#e9c46a',full:'#e2665a',off:'#7a8494',idle:'#8c99a8'};
 // ---------- construction: the machine is printed from the ground up ----------
 const HOLO='#6cc3e0', waves=[];
 function drawConstruct(c,b,sp,p,queued,dt){ const x=b.x, y=b.y, Ht=(BH[b.t]||24)+28, h=queued?0:Math.max(1.5,p*Ht), art=()=>{ if(sp) stand(c,sp,x,y); else drawIsoArt(c,b,0,true); };
@@ -1491,7 +1501,7 @@ function drawWaves(c,dt){ for(let i=waves.length-1;i>=0;i--){ const w=waves[i]; 
 function badge(c,X,Y,r){ c.fillStyle='rgba(20,24,29,.88)'; c.beginPath(); c.arc(X,Y,r,0,7); c.fill(); }
 // belt ports: a chute built out of the building's own wall (its body colour), reaching to the pad edge;
 // the belt slides under its rubber flaps, so the belt end is always hidden.
-const PORT_IN={miner:.16,pump:.15,smelter:.12,constructor:.1,assembler:.07,foundry:.1,refinery:.08,manufacturer:.05,burner:.28,coal_gen:.1,fuel_gen:.1,geo_gen:.12,storage:.22,recycler:.12,splitter:.2,merger:.2,drone_port:.06,core:.16};
+const PORT_IN={miner:.16,pump:.15,smelter:.12,constructor:.1,assembler:.07,foundry:.1,refinery:.08,manufacturer:.05,burner:.28,coal_gen:.1,fuel_gen:.1,geo_gen:.12,storage:.22,recycler:.12,splitter:.2,merger:.2,drone_port:.3,core:.16};
 function drawPorts(c,id,front,type){ const L=ports.get(id); if(!L) return; const st=beltStyle(), body=type==='core'?'#dfe3e8':BC[type]||'#5b636d', ins=PORT_IN[type]??.12;
   for(const p of L){ const isF=p.dx>0||p.dy>0; if(isF!==front) continue; AX=iso(p.tx,p.ty)[0]; AY=iso(p.tx,p.ty)[1];
     const ux=p.dx>0?1:p.dx<0?0:null, vy=p.dy>0?1:p.dy<0?0:null, sg=p.dx||p.dy;
@@ -1707,10 +1717,12 @@ function frame(ts){
   const d=G.S.drop; if(d.active) objs.push({k:d.x+d.y+.5,f:()=>drawDrop(c)});
   objs.sort((a,b)=>a.k-b.k).forEach(o=>o.f());
   drawWaves(c,dt); for(const f of ovl) f(); ovl=[];
-  for(const pb of G.S.buildings){ if(pb.t!=='drone_port'||pb.off||(pb.job&&pb.job.k==='build')) continue; const a=iso(pb.x+.5,pb.y+.5), bz=iso(CORE.x+1,CORE.y+1);
-    for(let i=0;i<3;i++){ const f=(time*.12+i/3+pb.id*.17)%1, back=f>.5, u=back?(1-f)*2:f*2, X=a[0]+(bz[0]-a[0])*u, Y=a[1]+(bz[1]-a[1])*u, hgt=20+Math.sin(u*Math.PI)*70+Math.sin(time*6+i)*2;
-      c.fillStyle='rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(X,Y,7,3.5,0,0,7); c.fill(); c.fillStyle='#3d444d'; c.beginPath(); c.moveTo(X-8,Y-hgt); c.lineTo(X,Y-hgt-4); c.lineTo(X+8,Y-hgt); c.lineTo(X,Y-hgt+4); c.fill();
-      c.fillStyle='#c9d1db'; for(const [dx,dy] of [[-8,0],[8,0],[0,-4],[0,4]]){ c.beginPath(); c.ellipse(X+dx,Y-hgt+dy-2,3.5,1.2,0,0,7); c.fill(); } c.fillStyle=back?'#6cc3e0':'#e9a23b'; c.fillRect(X-1.5,Y-hgt+2,3,3); } }
+  // power lines: each Power Relay is cabled back to the Core's mast, with energy pulses running along it
+  { const cm=iso(CORE.x+1.5,CORE.y+.5); cm[1]-=96;
+    for(const pb of G.S.buildings){ if(pb.t!=='drone_port'||(pb.job&&pb.job.k==='build')) continue; const a=iso(pb.x+.5,pb.y+.5); a[1]-=60;
+      const dx=cm[0]-a[0], dy=cm[1]-a[1], sag=Math.min(90,Math.hypot(dx,dy)*.12), mx=(a[0]+cm[0])/2, my=(a[1]+cm[1])/2+sag, Q=t=>[(1-t)*(1-t)*a[0]+2*(1-t)*t*mx+t*t*cm[0],(1-t)*(1-t)*a[1]+2*(1-t)*t*my+t*t*cm[1]];
+      c.strokeStyle='rgba(30,34,40,.85)'; c.lineWidth=1.6; c.beginPath(); c.moveTo(a[0],a[1]); c.quadraticCurveTo(mx,my,cm[0],cm[1]); c.stroke();
+      if(!pb.off){ for(let k=0;k<4;k++){ const f=((time*.25+k/4+pb.id*.13)%1), q=Q(1-f); glowDot(c,q[0],q[1],1.8,'#4fb8b0',.55); } } } }
   for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.l+=dt; if(p.l>p.m){parts.splice(i,1);continue;} p.x+=p.vx*dt; p.y+=p.vy*dt; const f=p.l/p.m;
     if(p.k==='k'){ if(!p.col) p.vy+=80*dt; c.fillStyle=p.col?hexA(p.col,1-f):`rgba(255,220,120,${1-f})`; c.fillRect(p.x,p.y,2,2); continue; }
     c.fillStyle=p.k==='d'?`rgba(50,48,46,${.5*(1-f)})`:p.k==='w'?`rgba(235,245,250,${.55*(1-f)})`:`rgba(190,190,195,${.45*(1-f)})`; c.beginPath(); c.arc(p.x,p.y,p.r+f*9,0,7); c.fill(); }
@@ -1820,9 +1832,9 @@ const {ITEMS,RECIPES,BUILDINGS,MILESTONES,LIFT,UPGRADES,ZONES,PURITY,WEEKLY_STAG
 const $ = s => document.querySelector(s);
 const f = n => G.fmt(n), ft = s => G.fmtTime(s), S = () => G.S, now = () => Date.now();
 let cur = null, hold = false;
-const ST = {noinput:'No input belt',nobelt:'No output belt',build:'Under construction',run:'Running',low:'Underpowered',starve:'Waiting for input',full:'Output backed up',off:'Paused',idle:'Idle'};
-const STX = {noinput:'Nothing is belted in. Draw a belt from a producer, or feed it from the Core or a Silo.',nobelt:'Output has nowhere to go. Draw an output belt.',starve:'Inputs are connected but not arriving fast enough. Add more producers or a faster belt.',full:'The output buffer is full: whatever it feeds can\'t take more. Check storage capacity or the next machine.',low:'Not enough power. Build or fuel more generators.'};
-const BLOCKED = ['noinput','nobelt','full','starve'];
+const ST = {nogrid:'No power here',noinput:'No input belt',nobelt:'No output belt',build:'Under construction',run:'Running',low:'Underpowered',starve:'Waiting for input',full:'Output backed up',off:'Paused',idle:'Idle'};
+const STX = {nogrid:'This zone isn\'t linked to your main power grid. Build a Power Relay in this zone, or a generator here.',noinput:'Nothing is belted in. Draw a belt from a producer, or feed it from the Core or a Silo.',nobelt:'Output has nowhere to go. Draw an output belt.',starve:'Inputs are connected but not arriving fast enough. Add more producers or a faster belt.',full:'The output buffer is full: whatever it feeds can\'t take more. Check storage capacity or the next machine.',low:'Not enough power. Build or fuel more generators.'};
+const BLOCKED = ['noinput','nobelt','full','starve','nogrid'];
 const ic = (id,k='i',cls='ic') => `<img class="${cls}" src="${R.icon(id,k)}" alt="">`;
 const bar = (p,cls='') => `<div class="bar ${cls}"><i style="width:${Math.max(0,Math.min(100,p*100)).toFixed(1)}%"></i></div>`;
 const attrs = d => Object.entries(d).map(([k,v])=>`data-${k}="${v}"`).join(' ');
@@ -1879,7 +1891,7 @@ SH.building = id => {
       return `<button class="card row recipe ${b.r===r.id?'sel':''} ${un?'':'locked'}" data-a="setr" data-id="${id}" data-r="${r.id}" ${un?'':'disabled'}>${ic(o,'i','ic lg')}<div class="grow"><div class="ttl">${r.alt?r.n+' <span class="pill">ALT</span>':ITEMS[o].n}</div>
       <div class="rx">${Object.entries(r.in).map(([k,v])=>`${ic(k)}${v}`).join('<span class="op">+</span>')}<span class="op">→</span>${Object.entries(r.out).map(([k,v])=>`${ic(k)}${v}`).join(' ')}<small> /min</small></div>${un?'':r.alt?'<div class="lock">Analyse in Research → Variants</div>':`<div class="lock">Research: ${(who('r:'+r.id)||{}).n||''}</div>`}</div></button>`; }).join('');
   } else {
-    if(b._zone) h += `<div class="card warn">No Courier Pad in ${ZONES[G.zoneOf(b.x,b.y)].n}: running at 50%. Build one in this zone.</div>`;
+
     if(d.warm&&(b.warm||0)<.999) h += `<div class="card"><div class="row"><div class="ttl grow">Warming up</div><span class="mono">${Math.round((b.warm||0)*100)}%</span></div>${bar(b.warm||0,'pw')}<div class="muted sm">Full output in about ${ft((1-(b.warm||0))*d.warm)}</div></div>`;
     { const po=b.r?Object.keys(RECIPES[b.r].out)[0]:(b.t==='miner'||b.t==='pump')?(G.nodeAt(b.x,b.y)||{}).res:null;
       if(po&&ITEMS[po]) h += `<div class="card" id="cyc" data-bid="${b.id}"><div class="row">${ic(po)}<b class="grow">${ITEMS[po].n}</b><span class="mono" id="cyc-t"></span></div><div class="bar acc cyc"><i id="cyc-b"></i></div><div class="muted sm" id="cyc-s"></div>${b.r?`<div class="muted sm">Per item: ${Object.entries(RECIPES[b.r].in).map(([k,v])=>`${+(v/RECIPES[b.r].out[po]).toFixed(2)} ${ITEMS[k].n}`).join(' + ')}</div>`:''}</div>`; }

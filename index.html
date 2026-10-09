@@ -204,6 +204,9 @@ input{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--lin
 .dsw{width:40px;height:40px;flex:none;border-radius:8px;border:1px solid var(--line);display:grid;place-items:center;color:var(--acc);font-size:18px;background:#1c242d;transform:rotate(45deg) scale(.78)}
 
 .btn.pulse{animation:pcrit 1.6s ease-in-out infinite;border-color:var(--acc)}
+
+#tut.mini{right:auto;padding:0;border-radius:20px;background:var(--panel2)} #tut.mini.top{top:calc(var(--sa-t) + 96px)}
+.tutpill{display:flex;gap:6px;align-items:center;padding:7px 12px;font:600 12px var(--f-d);color:var(--fg)} .tutpill .eyebrow{margin:0}
 </style>
 </head>
 <body>
@@ -573,7 +576,7 @@ const seasonEnd=()=>(seasonKey()+1)*PASS.days*DAY;
 
 // ---------- state ----------
 function fresh(prev){
-  const s = {v:1,created:now(),last:now(),inv:{iron_plate:30,iron_rod:30},credits:0,cores:10,chips:1,
+  const s = {v:1,created:now(),last:now(),inv:{iron_plate:50,iron_rod:40},credits:0,cores:10,chips:1,
     buildings:[{id:1,t:'burner',x:CORE.x-2,y:CORE.y+1,warm:1}],cleared:{},clears:[],belts:[],nextBelt:1,beltsV:1,supplyV:1,mapV:1,floors:{},decor:[],surveys:[],nodeP:{},drives:0,alts:{},nextId:2,ms:{},dep:{},upg:{},research:[],slots:1,drones:1,
     lift:{phase:0,dep:{},build:null},extraNodes:[],sink:{},stats:{made:{},credits:0,taps:0},
     daily:null,weekly:null,login:{streak:0,last:null},exped:[],bought:{},skins:['classic'],skin:'classic',
@@ -852,8 +855,8 @@ function overclock(id,dir){ const b=S.buildings.find(b=>b.id===id); if(!b) retur
   else if(b.oc>0){ b.oc--; S.chips++; } emit('change'); }
 const MK_COST={2:{frame:5,steel_pipe:20},3:{computer:2,heavy_frame:1,plastic:20}};
 function upgradeMiner(id){ const b=S.buildings.find(b=>b.id===id); const nx=(b.mk||1)+1; if(nx>3) return;
-  if(!has('u:mk'+nx)) return toast(`Drill Rig Mk${nx} not researched`,'bad');
-  if(!canPay(MK_COST[nx])) return toast('Need '+missing(MK_COST[nx]),'bad'); if(b.job) return toast('Busy','bad'); pay(MK_COST[nx]); b.job={k:'mk',cost:MK_COST[nx],to:nx,dur:mkTime(nx)*1000,q:true,c:now()}; startJobs(now()); toast(`Mk${nx} upgrade queued`,'good'); emit('change'); }
+  if(!has('u:mk'+nx)) return toast(`Drill Rig Gen ${nx} not researched`,'bad');
+  if(!canPay(MK_COST[nx])) return toast('Need '+missing(MK_COST[nx]),'bad'); if(b.job) return toast('Busy','bad'); pay(MK_COST[nx]); b.job={k:'mk',cost:MK_COST[nx],to:nx,dur:mkTime(nx)*1000,q:true,c:now()}; startJobs(now()); toast(`Gen ${nx} upgrade queued`,'good'); emit('change'); }
 // ---------- construction jobs ----------
 const buildSlots = () => 2+(S.ms.m_asm?1:0)+(S.bought.bslot?1:0)+(S.stech.st_drone?1:0);
 const jobMult = () => Math.pow(.92,lv('u_build'))/mods().research;
@@ -866,7 +869,7 @@ function startJobs(at){ let n=activeJobs().length; for(const b of jobs().filter(
 function finishJob(b){ const j=b.job; delete b.job; if(j.k==='build') setTimeout(()=>emit('built',b));
   if(j.k==='clear'){ S.cleared[b.x+','+b.y]=1; S.clears=S.clears.filter(o=>o!==b); dirty(); return; }
   if(j.k==='survey'){ S.nodeP[b.nid]=j.to; S.surveys=S.surveys.filter(o=>o!==b); dirty(); toast(`Survey complete: node is now ${PURITY[j.to].n}`,'good'); return; }
-  if(j.k==='lv'){ b.lv=j.to; if(j.dur>60000) toast(`${BUILDINGS[b.t].n} reached Lv ${j.to}`,'good'); } else if(j.k==='asc'){ b.asc=j.to; b.lv=1; emit('ascend',b); } else if(j.k==='mk'){ b.mk=j.to; if(j.dur>60000) toast(`Drill Rig Mk${j.to} ready`,'good'); } else if(j.dur>60000) toast(BUILDINGS[b.t].n+' finished','good'); dirty(); }
+  if(j.k==='lv'){ b.lv=j.to; if(j.dur>60000) toast(`${BUILDINGS[b.t].n} reached Lv ${j.to}`,'good'); } else if(j.k==='asc'){ b.asc=j.to; b.lv=1; emit('ascend',b); } else if(j.k==='mk'){ b.mk=j.to; if(j.dur>60000) toast(`Drill Rig Gen ${j.to} ready`,'good'); } else if(j.dur>60000) toast(BUILDINGS[b.t].n+' finished','good'); dirty(); }
 const jobRushCost = b => { const j=b.job, rem=j.q?j.dur:j.e-now(); return rem<=30000?0:Math.max(1,Math.ceil(rem/1000/300)); };
 function rushJob(id){ const b=jobObj(id); if(!b||!b.job) return; const c=jobRushCost(b); if(S.cores<c) return toast(`Need ${c} Data Cores`,'bad'); S.cores-=c; finishJob(b); startJobs(now()); emit('change'); }
 function cancelJob(id){ const b=jobObj(id); if(!b||!b.job) return; if(b.job.k==='build') return demolish(b.id);
@@ -2144,7 +2147,7 @@ function closeModal(){ $('#modal').hidden=true; }
 function toast(m,k=''){ const t=document.createElement('div'); t.className='toast '+k; t.textContent=m; const box=$('#toasts'); box.appendChild(t); while(box.children.length>3) box.firstChild.remove(); setTimeout(()=>{t.classList.add('out'); setTimeout(()=>t.remove(),400);},3200); }
 function gainsList(g){ return `<div class="gains">${g.gains.slice(0,8).map(([k,v])=>`<span>${ic(k)}<b>+${f(v)}</b></span>`).join('')}${g.credits?`<span>${cr(g.credits)}<b>Credits</b></span>`:''}</div>`; }
 function offline(o){ modal(`<div class="eyebrow">Welcome back, Engineer</div><h2>Your factory kept running</h2><p class="muted">Away ${ft(o.away)}${o.away>o.sec?` · production capped at ${ft(o.sec)} (raise with Autonomous Ops)`:''}.</p>${o.gains.length||o.credits?gainsList(o):'<p class="muted">Nothing was produced. Build miners and machines to earn while away.</p>'}${btn('Collect','mclose',{},'pri wide')}`); }
-function intro(){ modal(`<div class="eyebrow">Planet survey · Landing Meadow</div><h2>Build the Orbital Lift</h2><p>Your drop pod landed on an untouched world. Mine its ore, chain machines into production lines, and deliver parts to the Orbital Lift to unlock new tiers.</p><p class="muted">Tap a glowing node to mine it. Tap empty ground to build. Pinch to zoom, drag to pan.</p>${btn('Start building','intro',{},'pri wide')}`); }
+function intro(){ modal(`<div class="eyebrow">Planet survey · Landing Meadow</div><h2>Build the Orbital Lift</h2><p>Your drop pod landed on an untouched world. Mine its ore, chain machines into production lines, and deliver parts to the Orbital Lift to unlock new eras.</p><p class="muted">Tap a glowing node to mine it. Tap empty ground to build. Pinch to zoom, drag to pan.</p>${btn('Start building','intro',{},'pri wide')}`); }
 
 // ---------------- actions ----------------
 const ACT = {
@@ -2184,14 +2187,14 @@ const ACT = {
   beltdraw:d=>startBelt(d.id==='core'?'core':+d.id), supply:d=>{ const b=S().buildings.find(t=>t.id===+d.id); if(b){ const n=G.autoSupply(b); if(n) toast(`${n} input belt${n>1?'s':''} added`,'good'); render(); } }, beltauto:d=>{ const b=S().buildings.find(t=>t.id===+d.id); if(b&&G.autoConnect(b)) toast('Belt connected','good'); render(); }, beltrm:d=>{ G.removeBelt(+d.id); render(); },
   beltundo:()=>{ const bm=R.beltMode; if(!bm) return; if(bm.to!=null) bm.to=null; else bm.path.pop(); updBelt(); },
   unload:d=>{ G.unload(+d.id); render(); },
-  lowplate:()=>{ const how=plateFix(); if(how.k==='unload'){ R.focus(how.b.x,how.b.y); R.setSel(how.b); open('building',how.b.id,'info'); setTimeout(()=>{ const x=document.querySelector('[data-a=unload]'); if(x) x.classList.add('pulse'); },50); return; } if(how.k==='node'){ R.focus(how.n.x,how.n.y); toast('Tap this iron node to gather ore by hand, then craft plates at the Core','good'); return; } if(how.k==='craft'){ R.focus(D.CORE.x+.5,D.CORE.y+.5); R.setSel({x:D.CORE.x,y:D.CORE.y,w:2,h:2}); open('core'); setTimeout(()=>{ const b=document.querySelector(`#wb [data-a=craft][data-it=${(S().inv.iron_ore||0)>=3?'iron_plate':'plate_i'}][data-n="9999"]`); if(b){ b.classList.add('pulse'); } },50); } else { const n=G.nodes().filter(n=>n.res==='iron_ore').sort((a,b)=>Math.hypot(a.x-D.CORE.x,a.y-D.CORE.y)-Math.hypot(b.x-D.CORE.x,b.y-D.CORE.y))[0]; if(n){ R.focus(n.x,n.y); toast('Tap this iron node to gather ore by hand, then craft plates at the Core','good'); } } },
+  lowplate:()=>{ const how=plateFix(); if(how.k==='unload'){ R.focus(how.b.x,how.b.y); R.setSel(how.b); open('building',how.b.id,'info'); setTimeout(()=>{ const x=document.querySelector('[data-a=unload]'); if(x) x.classList.add('pulse'); },50); return; } if(how.k==='node'){ R.focus(how.n.x,how.n.y); toast('Tap this iron node to gather ore by hand, then craft Iron Sheets at the Core','good'); return; } if(how.k==='craft'){ R.focus(D.CORE.x+.5,D.CORE.y+.5); R.setSel({x:D.CORE.x,y:D.CORE.y,w:2,h:2}); open('core'); setTimeout(()=>{ const b=document.querySelector(`#wb [data-a=craft][data-it=${(S().inv.iron_ore||0)>=3?'iron_plate':'plate_i'}][data-n="9999"]`); if(b){ b.classList.add('pulse'); } },50); } else { const n=G.nodes().filter(n=>n.res==='iron_ore').sort((a,b)=>Math.hypot(a.x-D.CORE.x,a.y-D.CORE.y)-Math.hypot(b.x-D.CORE.x,b.y-D.CORE.y))[0]; if(n){ R.focus(n.x,n.y); toast('Tap this iron node to gather ore by hand, then craft Iron Sheets at the Core','good'); } } },
   alerts:()=>{ const stl=S().buildings.filter(b=>BLOCKED.includes(b._s)&&!b.off&&!b.job); if(!stl.length) return; const b=stl[alertI++%stl.length]; R.focus(b.x,b.y); open('building',b.id,'info'); },
   beltcancel:()=>endBelt(), beltok:()=>{ const bm=R.beltMode; if(!bm||bm.to==null) return; if(G.addBelt(bm.from.id,bm.to,bm.path)){ toast('Belt built','good'); const id=bm.from.id; endBelt(); open('building',id); } },
   beltautoroute:()=>{ const bm=R.beltMode; if(!bm) return; let best=null; for(const to of ['core',...S().buildings.map(t=>t.id)].filter(to=>G.validTarget(bm.from,to))){ const p=G.route(bm.from,to); if(p&&(!best||p.length<best.p.length)) best={to,p}; } if(!best) return toast('No clear path found','bad'); bm.path=best.p; bm.to=best.to; updBelt(); },
   setting:d=>{ S().settings[d.k]=!setOn(d.k); applySettings(); render(); },
   move:d=>startMove(+d.id),
   starttech:d=>G.startShard(d.id), shard2drive:()=>G.shardToDrive(), reclaim:d=>G.reclaimItem(d.it,+d.f),
-  tutnext:()=>tutAdvance(), tutskip:()=>tutSkip(), tutreplay:()=>{ close(); tutStart(); },
+  tutnext:()=>tutAdvance(), tutmin:()=>{ S().tutMin=!S().tutMin; tutRender(); }, tutskip:()=>tutSkip(), tutreplay:()=>{ close(); tutStart(); },
   mclose:closeModal, intro:()=>{ S().intro=true; closeModal(); if(!S().tutDone&&S().tut==null) tutStart(); },
   goal:()=>{ const t=G.goal().t; if(/Research|research/.test(t)) open('research'); else if(/Lift/.test(t)) open('lift'); else if(/Contract|Daily/.test(t)) open('ops'); else toast(t); },
 };
@@ -2235,36 +2238,41 @@ const TUT=[
   {t:'Look around',m:'Drag with one finger to move the camera. Pinch (or scroll) to zoom. The white building is your Core: everything you make is stored there.',next:true,world:()=>[D.CORE.x+1,D.CORE.y+1]},
   {t:'Find iron',m:'Ore comes from resource nodes. Tap the glowing iron node.',world:()=>{ const n=firstNode(); return n?[n.x+.5,n.y+.5]:null; },done:()=>cur&&cur.k==='node'||cnt('miner')>0},
   {t:'Place a Drill Rig',m:'Tap <b>Place</b> to build a Drill Rig on this node. (Tapping a node also gathers a little ore by hand.)',el:'[data-a=placeOn]',done:()=>cnt('miner')>0},
-  {t:'Construction takes time',m:'Buildings are built by your drones. Jobs under 30 seconds finish for free: tap the Drill Rig and press <b>Finish now</b>, or just wait.',world:()=>{ const b=firstOf('miner'); return b?[b.x+.5,b.y+.5]:null; },done:()=>isBuilt(firstOf('miner'))},
+  {t:'Construction takes time',m:'Buildings are built by your drones. Jobs under 30 seconds finish for free: tap the Drill Rig and press <b>Finish now</b>, or just wait.',el:()=>cur&&cur.k==='building'?'[data-a=rushjob]':null,world:()=>{ const b=firstOf('miner'); return b?[b.x+.5,b.y+.5]:null; },done:()=>isBuilt(firstOf('miner'))},
   {t:'Lay your first belt',m:'Every machine needs an <b>output belt</b> or it stops (a pulsing <b>!</b> marker appears over it). Tap the Drill Rig → <b>Draw belt</b>, then drag tiles toward the Core and <b>tap the Core</b> to connect (tap it straight away to route automatically). Press <b>Build</b> to lay it (1 Iron Sheet per tile).',el:()=>!$('#beltbar').hidden?(R.beltMode&&R.beltMode.to!=null?'#beltok':null):cur&&cur.k==='building'?'[data-a=beltdraw]':null,world:()=>{ const b=firstOf('miner'); return b?[b.x+.5,b.y+.5]:null; },done:()=>{ const b=firstOf('miner'); return b&&G.connected(b); }},
   {t:'Watch your stock',m:'Open the Resources sidebar to see everything you hold and how fast it\'s changing.',el:'#sb-tog',done:()=>!!S().settings.sb},
   {t:'Build a Smelting Furnace',m:'Ore needs smelting. Open <b>Build</b> → <b>Production</b> → <b>Smelting Furnace</b> → <b>Place</b>, then tap a green tile near your Drill Rig.',el:()=>cur&&cur.k==='build'?'[data-a=pick][data-t=smelter], [data-a=subtab][data-t=Production]':'#tabs [data-t=build]',done:()=>cnt('smelter')>0},
   {t:'Pick a recipe',m:'Machines need a recipe. Choose <b>Iron Ingot</b>.',el:'[data-a=setr][data-r=iron_ingot]',done:()=>S().buildings.some(b=>b.r==='iron_ingot')},
   {t:'Feed the Smelting Furnace',m:'Machines only use ingredients that arrive by belt, and hold a small stock of each inside. Redraw the Drill Rig\'s belt into the Smelting Furnace (tap Drill Rig → <b>Redraw belt</b> → tap the Smelting Furnace), or open the Smelting Furnace and tap <b>Auto-connect inputs</b>.',el:()=>!$('#beltbar').hidden?(R.beltMode&&R.beltMode.to!=null?'#beltok':null):cur&&cur.k==='building'?'[data-a=supply], [data-a=beltdraw]':null,world:()=>{ const b=firstOf('smelter'); return b?[b.x+.5,b.y+.5]:null; },done:()=>{ const b=firstOf('smelter'); return b&&G.inputRoutes(b).iron_ore&&G.inputRoutes(b).iron_ore.length>0; }},
   {t:'Smelting Furnace output',m:'Now give the Smelting Furnace its own output belt: open it → <b>Draw belt</b> → tap the Core (or tap <b>Auto-route</b>).',el:()=>!$('#beltbar').hidden?(R.beltMode&&R.beltMode.to!=null?'#beltok':null):cur&&cur.k==='building'?'[data-a=beltauto], [data-a=beltdraw]':null,world:()=>{ const b=firstOf('smelter'); return b?[b.x+.5,b.y+.5]:null; },done:()=>{ const b=firstOf('smelter'); return b&&G.connected(b); }},
-  {t:'Make Iron Sheets',m:'Build a <b>Fabricator</b> and set it to <b>Iron Sheet</b>. Plates build almost everything early on.',el:()=>cur&&cur.k==='build'?'[data-a=pick][data-t=constructor]':cur&&cur.k==='building'?'[data-a=setr][data-r=iron_plate]':'#tabs [data-t=build]',done:()=>S().buildings.some(b=>b.r==='iron_plate')},
-  {t:'Wire the Fabricator',m:'Give it ingots and somewhere to send plates: open the Fabricator, tap <b>Auto-connect inputs</b> (or redraw the Smelting Furnace\'s belt into it) and <b>Auto-route</b> its output to the Core.',el:()=>!$('#beltbar').hidden?(R.beltMode&&R.beltMode.to!=null?'#beltok':null):cur&&cur.k==='building'?'[data-a=supply], [data-a=beltauto]':null,world:()=>{ const b=S().buildings.find(b=>b.r==='iron_plate'); return b?[b.x+.5,b.y+.5]:null; },done:()=>{ const b=S().buildings.find(b=>b.r==='iron_plate'); return b&&G.connected(b)&&G.inputRoutes(b).iron_ingot.length>0; }},
-  {t:'Mind the power',m:'Machines draw power (MW). If demand passes supply, everything slows down. Build more Biomass Burners from Build → Power when this bar turns red.',el:'#pwr',next:true},
+  {t:'Make Iron Sheets',m:'Build a <b>Fabricator</b> and set it to <b>Iron Sheet</b>. Iron Sheets build almost everything early on.',el:()=>cur&&cur.k==='build'?'[data-a=pick][data-t=constructor]':cur&&cur.k==='building'?'[data-a=setr][data-r=iron_plate]':'#tabs [data-t=build]',done:()=>S().buildings.some(b=>b.r==='iron_plate')},
+  {t:'Wire the Fabricator',m:'Give it ingots and somewhere to send its sheets: open the Fabricator, tap <b>Auto-connect inputs</b> (or redraw the Smelting Furnace\'s belt into it) and <b>Auto-route</b> its output to the Core.',el:()=>!$('#beltbar').hidden?(R.beltMode&&R.beltMode.to!=null?'#beltok':null):cur&&cur.k==='building'?'[data-a=supply], [data-a=beltauto]':null,world:()=>{ const b=S().buildings.find(b=>b.r==='iron_plate'); return b?[b.x+.5,b.y+.5]:null; },done:()=>{ const b=S().buildings.find(b=>b.r==='iron_plate'); return b&&G.connected(b)&&G.inputRoutes(b).iron_ingot.length>0; }},
+  {t:'Mind the power',m:'Machines draw power (MW). If demand passes supply, everything slows down. Build more Scrap Burners from Build → Power when this bar turns red.',el:'#pwr',next:true},
   {t:'See it working',m:'Tap any running machine to see its live production timer: how long each part takes and when the next one arrives.',done:()=>cur&&cur.k==='building'&&document.getElementById('cyc'),world:()=>{ const b=firstOf('constructor')||firstOf('smelter'); return b?[b.x+.5,b.y+.5]:null; }},
-  {t:'Research unlocks the world',m:'Open <b>Research</b>. Each project needs parts delivered, then runs on a timer. Start <b>Field Operations</b> once you have 20 plates and 20 rods (a second Fabricator making Iron Bars helps).',el:()=>cur&&cur.k==='research'?'[data-a=dep][data-id=m_field]':'#tabs [data-t=research]',done:()=>S().ms.m_field||S().research.some(r=>r.id==='m_field')},
+  {t:'Research unlocks the world',m:'Open <b>Research</b>. Each project needs parts delivered, then runs on a timer. Start <b>Field Operations</b> once you have 20 Iron Sheets and 20 Iron Bars (a second Fabricator making Iron Bars helps).',el:()=>cur&&cur.k==='research'?'[data-a=dep][data-id=m_field]':'#tabs [data-t=research]',done:()=>S().ms.m_field||S().research.some(r=>r.id==='m_field')},
   {t:'Daily supplies',m:'Come back every day: <b>Ops</b> has a login reward, three contracts, weekly goals, the Frontier Pass and scout drones. Claim today\'s supply now.',el:()=>cur&&cur.k==='ops'?'[data-a=login]':'#tabs [data-t=ops]',done:()=>!G.canLogin()},
-  {t:'Your goal',m:'The <b>Orbital Lift</b> next to the Core unlocks new tiers as you deliver parts. Level up machines, unlock zones, and one day Launch. The Objective bar at the top always shows your next step. Good luck, Engineer!',el:'#tabs [data-t=lift]',next:true,last:true},
+  {t:'Your goal',m:'The <b>Orbital Lift</b> next to the Core unlocks new eras as you deliver parts. Level up machines, unlock zones, and one day Launch. The Objective bar at the top always shows your next step. Good luck, Engineer!',el:'#tabs [data-t=lift]',next:true,last:true},
 ];
 let tutRect=null;
 function tutStep(){ const s=S(); if(s.tutDone||s.tut==null) return null; return TUT[s.tut]||null; }
-function tutAdvance(){ const s=S(); s.tut++; if(s.tut>=TUT.length){ s.tutDone=true; s.tut=null; G.grant({cores:20,chips:1}); toast('Tutorial complete: +20 Data Cores, +1 Overclock Chip','good'); } tutRender(); }
-function tutSkip(){ const s=S(); s.tutDone=true; s.tut=null; tutRender(); }
+function tutAdvance(){ const s=S(); s.tut++; if(s.tut>=TUT.length){ s.tutDone=true; s.tut=null; G.grant({cores:20,chips:1}); toast('Tutorial complete: +20 Data Cores, +1 Overclock Chip','good'); G.save(); } tutRender(); }
+function tutSkip(){ const s=S(); s.tutDone=true; s.tut=null; G.save(); tutRender(); }
 function tutStart(){ const s=S(); s.tutDone=false; s.tut=0; tutRender(); }
-function tutRender(){ const st=tutStep(), box=$('#tut'), ring=$('#tut-ring'); if(!st){ box.hidden=true; ring.hidden=true; $('#goal').hidden=false; return; }
+function tutRender(){ const st=tutStep(), box=$('#tut'), ring=$('#tut-ring'); if(!st){ box.hidden=true; box.innerHTML=''; ring.hidden=true; $('#goal').hidden=false; return; }
   $('#goal').hidden=true; box.hidden=false; const i=S().tut;
-  box.innerHTML=`<div class="row"><span class="eyebrow grow">Guide · ${i+1}/${TUT.length}</span><button class="x sm" data-a="tutskip" aria-label="Skip tutorial">Skip</button></div><div class="ttl">${st.t}</div><div class="desc">${st.m}</div>${st.next?`<div>${btn(st.last?'Finish':'Next','tutnext',{},'pri')}</div>`:''}`; tutTick(); }
+  box.classList.toggle('mini',!!S().tutMin);
+  if(S().tutMin){ box.innerHTML=`<button class="tutpill" data-a="tutmin"><span class="eyebrow">Guide ${i+1}/${TUT.length}</span> ${st.t} <b>▾</b></button>`; tutTick(); return; }
+  box.innerHTML=`<div class="row"><span class="eyebrow grow">Guide · ${i+1}/${TUT.length}</span><button class="x sm" data-a="tutmin" aria-label="Minimise guide">Hide</button><button class="x sm" data-a="tutskip" aria-label="Skip tutorial">Skip</button></div><div class="ttl">${st.t}</div><div class="desc">${st.m}</div>${st.next?`<div>${btn(st.last?'Finish':'Next','tutnext',{},'pri')}</div>`:''}`; tutTick(); }
 function tutTick(){ const st=tutStep(), ring=$('#tut-ring'), box=$('#tut'); if(!st){ ring.hidden=true; return; }
+  { const iv=S().inv; if((iv.iron_plate||0)<15||(iv.iron_rod||0)<10){ iv.iron_plate=Math.max(iv.iron_plate||0,15); iv.iron_rod=Math.max(iv.iron_rod||0,10); if(!tutTick.t||Date.now()-tutTick.t>20000){ tutTick.t=Date.now(); toast('Guide supplies: topped up your Iron Sheets and Bars','good'); } } }
   if(st.done&&st.done()){ tutAdvance(); return; }
+  // while placing a building or drawing a belt, the guide steps aside: the bottom bar carries the instructions and the map stays tappable
+  const busy=!!(R.placing||R.beltMode||R.decorMode); box.hidden=busy; if(busy){ ring.hidden=true; return; }
   let r=null; const sel=typeof st.el==='function'?st.el():st.el;
   if(sel){ const el=[...document.querySelectorAll(sel)].find(e=>e.offsetParent!==null); if(el){ const b=el.getBoundingClientRect(); r={x:b.left-6,y:b.top-6,w:b.width+12,h:b.height+12}; } }
   else if(st.world){ const w=st.world(); if(w){ const [sx,sy]=R.toScreen(w[0],w[1]); r={x:sx-34,y:sy-30,w:68,h:52}; } }
   if(r){ ring.hidden=false; Object.assign(ring.style,{left:r.x+'px',top:r.y+'px',width:r.w+'px',height:r.h+'px'}); } else ring.hidden=true;
-  const low=r&&r.y>window.innerHeight*.5; box.classList.toggle('top',!!low); }
+  const sheetOpen=!$('#sheet').hidden, low=r?r.y+r.h/2>window.innerHeight*.5:sheetOpen; box.classList.toggle('top',!!low); }
 // ---------------- HUD ----------------
 // cheapest way back to Iron Sheets: craft from Core stock → unload a machine holding iron → hand-mine a node
 function plateFix(){ const s=S(), iv=s.inv; if((iv.iron_ore||0)>=3||(iv.iron_ingot||0)>=3) return {k:'craft'};
